@@ -1,0 +1,16 @@
+{
+  "version": "0.0.5",
+  "author_name": "Streamer",
+  "description": "Item Voting System",
+  "icon_urls": {
+    "100x100": "https://extension-files.twitch.tv/static/default-icon-100x100.png"
+  },
+  "views": {
+    "video_overlay": {
+      "viewer_url": "overlay.html",
+      "can_link_external_content": true
+    }
+  },
+  "whitelisted_config_urls": [],
+  "whitelisted_panel_urls": []
+}
