@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Twitch Vote Overlay</title>
+
+  <!-- ✅ REQUIRED for Twitch Extensions (safe in OBS too) -->
+  <script src="https://extension-files.twitch.tv/helper/v1/twitch-ext.min.js"></script>
+
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: rgba(0, 0, 0, 0);
+      overflow: hidden;
+      width: 100%;
+      height: 100%;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    #root {
+      position: absolute;
+      bottom: 40px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 12px 18px;
+      border-radius: 18px;
+      background: rgba(0, 0, 0, 0.55);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      color: white;
+
+      /* ✅ more responsive than hard min-width */
+      width: min(640px, calc(100vw - 40px));
+      backdrop-filter: blur(6px);
+    }
+
+    #top-row{
+      width: 100%;
+      display:flex;
+      justify-content: space-between;
+      align-items:center;
+      gap: 12px;
+      margin-bottom: 6px;
+    }
+
+    #title {
+      font-size: 20px;
+      text-shadow: 0 0 8px rgba(221, 214, 214, 0.8);
+      white-space: nowrap;
+    }
+
+    #status {
+      display:flex;
+      align-items:center;
+      gap: 8px;
+      font-size: 12px;
+      opacity: .9;
+      user-select:none;
+      white-space: nowrap;
+    }
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: #888;
+      box-shadow: 0 0 10px rgba(0,0,0,.5);
+    }
+    .dot.ok { background: #2ecc71; }
+    .dot.bad { background: #e74c3c; }
+    .dot.warn { background: #f1c40f; }
+
+    #timer {
+      font-size: 14px;
+      margin-bottom: 10px;
+      opacity: 0.92;
+    }
+
+    #items {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      justify-content: center;
+      width: 100%;
+    }
+
+    .item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 8px 10px;
+      border-radius: 12px;
+      background: rgba(0, 0, 0, 0.40);
+      min-width: 92px;
+      flex: 1 1 92px;
+      max-width: 150px;
+    }
+
+    .item.winner {
+      background: rgba(255, 215, 0, 0.40);
+      box-shadow: 0 0 15px rgba(255, 215, 0, 0.70);
+    }
+
+    .emoji {
+      font-size: 40px;
+      margin-bottom: 4px;
+      text-shadow: 0 0 10px rgba(114, 114, 114, 0.70);
+    }
+
+    .label {
+      font-size: 13px;
+      margin-bottom: 2px;
+      text-align: center;
+      opacity: .95;
+      word-break: break-word;
+    }
+
+    .votes {
+      font-size: 14px;
+      font-weight: 800;
+    }
+
+    #winner-banner {
+      position: absolute;
+      top: 10%;
+      left: 50%;
+      transform: translateX(-50%);
+      text-align: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.35s ease-out;
+      color: white;
+      width: min(900px, calc(100vw - 40px));
+    }
+    #winner-banner.show { opacity: 1; }
+
+    #winner-emoji { font-size: 72px; text-shadow: 0 0 15px rgba(0,0,0,0.9); display:block; }
+    #winner-text  { font-size: 24px; margin-top: 6px; text-shadow: 0 0 12px rgba(0,0,0,0.9); display:block; }
+    #placement-info { font-size: 18px; margin-top: 8px; opacity: .95; }
+  </style>
+</head>
+
+<body>
+  <div id="winner-banner">
+    <span id="winner-emoji">🎉</span>
+    <span id="winner-text">Winner: ...</span>
+    <div id="placement-info"></div>
+  </div>
+
+  <div id="root">
+    <div id="top-row">
+      <div id="title">Vote for the next item!</div>
+      <div id="status">
+        <span class="dot warn" id="dot"></span>
+        <span id="status-text">Connecting…</span>
+      </div>
+    </div>
+    <div id="timer">Waiting for round…</div>
+    <div id="items"></div>
+  </div>
+
+  <script>
+    // ============================
+    // CONFIG
+    // ============================
+    // ✅ Put only the host here (no scheme)
+    const SERVER_HOST = "unshepherded-laurie-ecliptically.ngrok-free.dev";
+    const WS_PATH = "/";
+
+    // If you run this in OBS and want to force auth manually:
+    // open the page like: .../overlay.html?token=XYZ&channel_id=123&debug=1
+    const params = new URLSearchParams(location.search);
+    const DEBUG = params.get("debug") === "1";
+
+    function log(...args) { if (DEBUG) console.log("[Overlay]", ...args); }
+
+    // ============================
+    // Twitch Extension Auth (JWT + channelId)
+    // ============================
+    let twitchToken = params.get("token") || null;
+    let twitchChannelId = params.get("channel_id") || null;
+
+    const hasTwitchExt = typeof window.Twitch !== "undefined" && Twitch.ext;
+
+    if (hasTwitchExt && Twitch.ext.onAuthorized) {
+      Twitch.ext.onAuthorized((auth) => {
+        // auth.token is JWT, auth.channelId is broadcaster channel id
+        twitchToken = auth.token;
+        twitchChannelId = auth.channelId;
+        log("Authorized:", { channelId: twitchChannelId, token: twitchToken ? "(present)" : "(missing)" });
+
+        // If WS is not connected yet, connect now. If already connected, you can reconnect with auth.
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+          connectWS();
+        }
+      });
+    }
+
+    // ============================
+    // State
+    // ============================
+    let ws = null;
+    let reconnectDelayMs = 800;
+    let pingTimer = null;
+
+    let currentRoundId = null;
+    let roundEndTime = null;
+    let roundActive = false;
+
+    // Preserve option order (Object.entries order can be inconsistent across updates)
+    let itemsOrder = []; // [key1,key2,...]
+    let itemsState = {}; // key -> { emoji, label, votes }
+
+    // ============================
+    // UI Helpers
+    // ============================
+    function setStatus(kind, text){
+      const dot = document.getElementById("dot");
+      const st  = document.getElementById("status-text");
+      dot.classList.remove("ok","bad","warn");
+      dot.classList.add(kind);
+      st.textContent = text;
+    }
+
+    function showWinnerBanner(emoji, text, placementText) {
+      const winnerBanner = document.getElementById("winner-banner");
+      const winnerEmojiSpan = document.getElementById("winner-emoji");
+      const winnerTextSpan = document.getElementById("winner-text");
+      const placementInfo = document.getElementById("placement-info");
+
+      winnerEmojiSpan.textContent = emoji;
+      winnerTextSpan.textContent = text;
+      placementInfo.textContent = placementText || "";
+
+      winnerBanner.classList.add("show");
+    }
+
+    function hideWinnerBanner() {
+      document.getElementById("winner-banner").classList.remove("show");
+      document.getElementById("placement-info").textContent = "";
+    }
+
+    // ============================
+    // WS URL Builder
+    // ============================
+    function buildWsUrl() {
+      // If this page is https, websocket must be wss
+      const scheme = (location.protocol === "https:") ? "wss://" : "ws://";
+      const base = scheme + SERVER_HOST + WS_PATH;
+
+      const q = new URLSearchParams();
+      q.set("client", "overlay");
+
+      // ✅ common backend needs
+      if (twitchChannelId) q.set("channel_id", twitchChannelId);
+
+      // ✅ JWT usually too long for headers in WS; query param is simplest
+      if (twitchToken) q.set("token", twitchToken);
+
+      // keep debug visibility
+      if (DEBUG) q.set("debug", "1");
+
+      return base + "?" + q.toString();
+    }
+
+    // ============================
+    // WS Connect / Reconnect / Keepalive
+    // ============================
+    function startPing() {
+      stopPing();
+      // ping every 25s to reduce idle disconnects (ngrok / proxies / CDNs)
+      pingTimer = setInterval(() => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: "ping", t: Date.now() }));
+        }
+      }, 25000);
+    }
+
+    function stopPing() {
+      if (pingTimer) clearInterval(pingTimer);
+      pingTimer = null;
+    }
+
+    function connectWS() {
+      // If running in a Twitch Extension, it's normal to wait for onAuthorized before connecting.
+      // But if your backend doesn't require auth, we still connect immediately.
+      const wsUrl = buildWsUrl();
+      log("Connecting WS:", wsUrl);
+
+      try {
+        ws = new WebSocket(wsUrl);
+      } catch (e) {
+        setStatus("bad", "WS init failed");
+        setTimeout(connectWS, 2000);
+        return;
+      }
+
+      setStatus("warn", "Connecting…");
+
+      ws.onopen = () => {
+        reconnectDelayMs = 800;
+        setStatus("ok", "Connected");
+        startPing();
+
+        // ✅ Ask server to sync state right away (prevents "blank until next round")
+        ws.send(JSON.stringify({
+          type: "overlay_hello",
+          want_state: true,
+          at: Date.now(),
+          channel_id: twitchChannelId || null
+        }));
+      };
+
+      ws.onclose = () => {
+        stopPing();
+        setStatus("bad", "Disconnected (retry)");
+        // jitter to avoid reconnect storms
+        const jitter = Math.floor(Math.random() * 250);
+        setTimeout(connectWS, reconnectDelayMs + jitter);
+        reconnectDelayMs = Math.min(6000, Math.floor(reconnectDelayMs * 1.4));
+      };
+
+      ws.onerror = () => {
+        // onerror usually followed by onclose
+        setStatus("bad", "WS error");
+      };
+
+      ws.onmessage = (event) => {
+        let data;
+        try { data = JSON.parse(event.data); }
+        catch { return; }
+        handleMessage(data);
+      };
+    }
+
+    // ============================
+    // Message Handling
+    // ============================
+    function handleMessage(data) {
+      // optional debug
+      log("msg:", data);
+
+      if (data.type === "round_start") handleRoundStart(data);
+      else if (data.type === "vote") handleVote(data);
+      else if (data.type === "round_result") handleRoundResult(data);
+      else if (data.type === "placement_request") handlePlacementRequest(data);
+      else if (data.type === "spawn_item") {
+        console.log("[Overlay] spawn_item:", data);
+      }
+      // ✅ Added: full state sync support (server can send this anytime)
+      else if (data.type === "state" || data.type === "sync") {
+        handleStateSync(data);
+      }
+      else if (data.type === "pong") {
+        // keepalive response, no UI needed
+      }
+    }
+
+    function handleStateSync(data) {
+      // Expected shapes (support multiple):
+      // {type:"state", round:{round_id,duration_remaining,active}, options:[...], votes:{key:count}}
+      // or {type:"sync", ...}
+      if (!data) return;
+
+      if (data.round) {
+        currentRoundId = data.round.round_id ?? currentRoundId;
+        roundActive = !!data.round.active;
+
+        if (typeof data.round.duration_remaining === "number") {
+          roundEndTime = Date.now() + (data.round.duration_remaining * 1000);
+        }
+      }
+
+      if (Array.isArray(data.options)) {
+        itemsState = {};
+        itemsOrder = [];
+        for (const opt of data.options) {
+          itemsOrder.push(opt.key);
+          itemsState[opt.key] = { emoji: opt.emoji, label: opt.label, votes: 0 };
+        }
+      }
+
+      if (data.votes && typeof data.votes === "object") {
+        for (const [k, v] of Object.entries(data.votes)) {
+          if (itemsState[k]) itemsState[k].votes = v;
+        }
+      }
+
+      renderItems();
+    }
+
+    function handleRoundStart(data) {
+      currentRoundId = data.round_id ?? null;
+      roundEndTime = Date.now() + ((data.duration || 0) * 1000);
+      roundActive = true;
+
+      itemsState = {};
+      itemsOrder = [];
+
+      for (const opt of (data.options || [])) {
+        itemsOrder.push(opt.key);
+        itemsState[opt.key] = { emoji: opt.emoji, label: opt.label, votes: 0 };
+      }
+
+      hideWinnerBanner();
+      renderItems();
+    }
+
+    function handleVote(data) {
+      if (!roundActive) return;
+      if (!data || !itemsState[data.item]) return;
+
+      // server sends: {type:"vote", item:"key", count: N}
+      itemsState[data.item].votes = Number(data.count || 0);
+      renderItems();
+    }
+
+    function handleRoundResult(data) {
+      roundActive = false;
+
+      if (data && data.votes) {
+        for (const [key, value] of Object.entries(data.votes)) {
+          if (itemsState[key]) itemsState[key].votes = value;
+        }
+      }
+
+      // Winner could be: {key, emoji, label} and votes may be missing
+      const winner = data && data.winner ? data.winner : null;
+      renderItems(winner);
+
+      if (winner && winner.key && itemsState[winner.key]) {
+        const w = itemsState[winner.key];
+        showWinnerBanner(
+          w.emoji,
+          `Winner: ${w.label} (${w.votes} vote${w.votes === 1 ? "" : "s"})`,
+          ""
+        );
+      } else if (winner && winner.emoji && winner.label) {
+        // fallback if server sends full winner
+        const votes = winner.votes ?? 0;
+        showWinnerBanner(
+          winner.emoji,
+          `Winner: ${winner.label} (${votes} vote${votes === 1 ? "" : "s"})`,
+          ""
+        );
+      } else {
+        showWinnerBanner("😴", "No votes this round", "");
+      }
+
+      // optional auto-hide after 6s (comment out if you want it permanent)
+      setTimeout(() => hideWinnerBanner(), 6000);
+    }
+
+    function handlePlacementRequest(data) {
+      // {type:"placement_request", chosen_user, emoji, label}
+      showWinnerBanner(
+        "📍",
+        "Placement needed",
+        `@${data.chosen_user} place ${data.emoji} ${data.label} with !place left | middle | right`
+      );
+    }
+
+    // ============================
+    // Render
+    // ============================
+    function renderItems(winner = null) {
+      const itemsDiv = document.getElementById("items");
+      itemsDiv.innerHTML = "";
+
+      const winnerKey = winner ? winner.key : null;
+
+      const keys = (itemsOrder.length > 0)
+        ? itemsOrder
+        : Object.keys(itemsState);
+
+      for (const key of keys) {
+        const item = itemsState[key];
+        if (!item) continue;
+
+        const div = document.createElement("div");
+        div.className = "item";
+        if (winnerKey && key === winnerKey) div.classList.add("winner");
+
+        const emojiSpan = document.createElement("div");
+        emojiSpan.className = "emoji";
+        emojiSpan.textContent = item.emoji;
+
+        const labelDiv = document.createElement("div");
+        labelDiv.className = "label";
+        labelDiv.textContent = item.label;
+
+        const votesDiv = document.createElement("div");
+        votesDiv.className = "votes";
+        votesDiv.textContent = `${item.votes} vote${item.votes === 1 ? "" : "s"}`;
+
+        div.appendChild(emojiSpan);
+        div.appendChild(labelDiv);
+        div.appendChild(votesDiv);
+        itemsDiv.appendChild(div);
+      }
+    }
+
+    function updateTimer() {
+      const timerDiv = document.getElementById("timer");
+
+      if (!roundActive || !roundEndTime) {
+        timerDiv.textContent = "Waiting for next round…";
+        requestAnimationFrame(updateTimer);
+        return;
+      }
+
+      const remainingMs = roundEndTime - Date.now();
+      const remainingSec = Math.max(0, Math.ceil(remainingMs / 1000));
+      timerDiv.textContent = `Time left: ${remainingSec}s`;
+
+      if (remainingSec <= 0) {
+        // visually end timer even if server result arrives slightly later
+        timerDiv.textContent = "Time left: 0s";
+      }
+
+      requestAnimationFrame(updateTimer);
+    }
+
+    // ============================
+    // Start
+    // ============================
+    // Connect immediately for OBS/local.
+    // In Twitch Extension context, this will also be called after onAuthorized (safe).
+    connectWS();
+    requestAnimationFrame(updateTimer);
+
+    // Clean up on navigation
+    window.addEventListener("beforeunload", () => {
+      try { stopPing(); } catch {}
+      try { if (ws) ws.close(); } catch {}
+    });
+  </script>
+</body>
+</html>
