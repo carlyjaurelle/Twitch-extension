@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Twitch Interactive Overlay</title>
+  <script src="https://extension-files.twitch.tv/helper/v1/twitch-ext.min.js"></script>
+  <style>
+    html, body {
+      margin: 0; padding: 0; background: transparent;
+      overflow: hidden; width: 100%; height: 100%;
+      font-family: system-ui, -apple-system, sans-serif;
+      color: white;
+    }
+
+    #top-status {
+      position: absolute; top: 15px; left: 15px;
+      background: rgba(20, 20, 20, 0.9); padding: 8px 15px;
+      border-radius: 20px; display: flex; align-items: center; gap: 10px;
+      font-size: 11px; border: 1px solid rgba(145, 70, 255, 0.4);
+    }
+    .dot { width: 10px; height: 10px; border-radius: 50%; background: #888; }
+    .dot.ok { background: #2ecc71; box-shadow: 0 0 8px #2ecc71; }
+
+    #mouse-zone {
+      position: absolute; top: 10%; left: 50%; transform: translateX(-50%);
+      width: 1024px; height: 500px; 
+      border: 3px solid rgba(145, 70, 255, 0.3);
+      background: rgba(145, 70, 255, 0.03);
+      border-radius: 15px; cursor: crosshair; 
+      pointer-events: none;
+    }
+    #mouse-zone.active { pointer-events: all; border-color: #00ff6a; background: rgba(0, 255, 106, 0.05); }
+
+    #mouse-hud {
+      position: absolute; left: 20px; top: 20px;
+      background: rgba(0, 0, 0, 0.85); padding: 10px 18px;
+      border-radius: 10px; font-size: 14px; font-family: monospace;
+      display: flex; gap: 20px; border: 1px solid #00ff6a;
+    }
+
+    #winner-banner {
+      position: absolute; top: 20%; left: 50%; transform: translateX(-50%);
+      text-align: center; opacity: 0; transition: 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      background: rgba(0,0,0,0.95); padding: 30px 60px; border-radius: 30px;
+      border: 2px solid #9146FF; z-index: 100; box-shadow: 0 0 40px rgba(0,0,0,0.8);
+    }
+    #winner-banner.show { opacity: 1; transform: translateX(-50%) scale(1.1); }
+    #winner-user { color: #00ff6a; font-size: 36px; font-weight: 900; display: block; }
+    #winner-item-text { font-size: 20px; color: #fff; margin-top: 10px; display: block; }
+
+    #root {
+      position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+      width: min(1300px, 95vw); padding: 20px; border-radius: 25px;
+      background: rgba(15, 15, 15, 0.95); backdrop-filter: blur(15px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    #top-row { display: flex; justify-content: space-between; margin-bottom: 15px; padding: 0 10px; }
+    #title { font-size: 18px; font-weight: 800; color: #9146FF; }
+    #timer { font-size: 16px; font-weight: bold; color: #ffcc00; }
+
+    #items { display: flex; flex-direction: row; justify-content: space-evenly; gap: 10px; }
+    .item {
+      flex: 1; display: flex; flex-direction: column; align-items: center;
+      padding: 10px; border-radius: 12px; background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255,255,255,0.05);
+    }
+    .emoji { font-size: 38px; }
+    .label { font-size: 11px; font-weight: bold; margin-top: 5px; text-align: center; }
+    .votes { font-size: 13px; color: #00ff6a; font-weight: bold; margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <div id="top-status"><div id="dot" class="dot"></div><div id="status-text">Connecting...</div></div>
+
+  <div id="mouse-zone">
+    <div id="mouse-hud">
+      <span>POS: <span id="xy">0, 0</span></span>
+      <span>VEL: <span id="vel">0, 0</span></span>
+    </div>
+  </div>
+
+  <div id="winner-banner">
+    <div id="winner-emoji" style="font-size: 80px;">🏆</div>
+    <span id="winner-user">@USER</span>
+    <span id="winner-item-text">Is placing ITEM</span>
+  </div>
+
+  <div id="root">
+    <div id="top-row">
+      <div id="title">ACTIVE VOTE</div>
+      <div id="timer">TIME: --s</div>
+    </div>
+    <div id="items"></div>
+  </div>
+
+  <script src="./overlay.js"></script>
+</body>
+</html>
