@@ -1,0 +1,114 @@
+{
+  "freeze_orb": {
+    "emoji": "🧊",
+    "name": "Freeze Orb",
+    "short_command": "freeze",
+    "description": "Brief snowstorm, slows movement",
+    "effect_type": "slow",
+    "color": [150, 220, 255]
+  },
+  "power_core": {
+    "emoji": "🔥",
+    "name": "Power Core",
+    "short_command": "fire",
+    "description": "Fire bursts / fireworks",
+    "effect_type": "damage_boost",
+    "color": [255, 80, 50]
+  },
+  "wind_boots": {
+    "emoji": "💨",
+    "name": "Wind Boots",
+    "short_command": "wind",
+    "description": "Strong gust pushes players",
+    "effect_type": "push",
+    "color": [200, 200, 255]
+  },
+  "shield_stone": {
+    "emoji": "🧱",
+    "name": "Shield Stone",
+    "short_command": "shield",
+    "description": "Falling stones create cover",
+    "effect_type": "shield",
+    "color": [160, 120, 90]
+  },
+  "chaos_mask": {
+    "emoji": "🎭",
+    "name": "Chaos Mask",
+    "short_command": "chaos",
+    "description": "Random status effects",
+    "effect_type": "random",
+    "color": [180, 80, 200]
+  },
+  "space_warp": {
+    "emoji": "🌀",
+    "name": "Space Warp",
+    "short_command": "warp",
+    "description": "Distorts movement paths",
+    "effect_type": "movement_distort",
+    "color": [100, 50, 255]
+  },
+  "time_bomb": {
+    "emoji": "⏳",
+    "name": "Time Bomb",
+    "short_command": "bomb",
+    "description": "Slow-time bubble, then blast",
+    "effect_type": "slow_explode",
+    "color": [255, 200, 100]
+  },
+  "flame_spout": {
+    "emoji": "🌋",
+    "name": "Flame Spout",
+    "short_command": "spout",
+    "description": "Flamethrower zone",
+    "effect_type": "hazard",
+    "color": [255, 60, 0]
+  },
+  "gravity_well": {
+    "emoji": "🌑",
+    "name": "Gravity Well",
+    "short_command": "gravity",
+    "description": "Heavier jumps + sluggish moves",
+    "effect_type": "gravity_debuff",
+    "color": [50, 50, 80]
+  },
+  "shock_pulse": {
+    "emoji": "⚡",
+    "name": "Shock Pulse",
+    "short_command": "shock",
+    "description": "Knockback shockwave",
+    "effect_type": "knockback",
+    "color": [255, 255, 100]
+  },
+  "micro_tornado": {
+    "emoji": "🌪️",
+    "name": "Micro Tornado",
+    "short_command": "tornado",
+    "description": "Roaming mini tornado",
+    "effect_type": "hazard_move",
+    "color": [220, 220, 220]
+  },
+  "impact_meteor": {
+    "emoji": "💥",
+    "name": "Impact Meteor",
+    "short_command": "meteor",
+    "description": "Small meteor shower",
+    "effect_type": "area_damage",
+    "color": [255, 100, 0]
+  },
+  "luck_capsule": {
+    "emoji": "🌈",
+    "name": "Luck Capsule",
+    "short_command": "luck",
+    "description": "Random buff/debuff",
+    "effect_type": "random",
+    "color": [255, 150, 255]
+  },
+  "growth_seed": {
+    "emoji": "🌿",
+    "name": "Growth Seed",
+    "short_command": "seed",
+    "description": "Vines block paths",
+    "effect_type": "obstacle",
+    "color": [50, 180, 50]
+  }
+}
